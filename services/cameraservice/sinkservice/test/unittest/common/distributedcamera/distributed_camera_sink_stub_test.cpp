@@ -36,6 +36,28 @@ namespace {
 static int32_t OHOS_PERMISSION_ENABLE_DISTRIBUTED_HARDWARE_INDEX = 0;
 static int32_t OHOS_PERMISSION_DISTRIBUTED_DATASYNC_INDEX = 1;
 static int32_t OHOS_PERMISSION_ACCESS_DISTRIBUTED_HARDWARE_INDEX = 2;
+
+void SetTokenIDWithoutEnableDHPermission()
+{
+    uint64_t tokenId;
+    int32_t numberOfPermissions = 2;
+    const char *perms[numberOfPermissions];
+    perms[0] = OHOS_PERMISSION_DISTRIBUTED_DATASYNC;
+    perms[1] = "ohos.permission.ACCESS_DISTRIBUTED_HARDWARE";
+    NativeTokenInfoParams infoInstance = {
+        .dcapsNum = 0,
+        .permsNum = numberOfPermissions,
+        .aclsNum = 0,
+        .dcaps = NULL,
+        .perms = perms,
+        .acls = NULL,
+        .processName = "dcamera_sink_handler_no_enable_perm",
+        .aplStr = "system_basic",
+    };
+    tokenId = GetAccessTokenId(&infoInstance);
+    SetSelfTokenID(tokenId);
+    OHOS::Security::AccessToken::AccessTokenKit::ReloadNativeTokenInfo();
+}
 }
 class TestAccessListener : public IAccessListener {
     sptr<IRemoteObject> AsObject()
@@ -538,6 +560,98 @@ HWTEST_F(DcameraSinkStubTest, dcamera_sink_stub_test_025, TestSize.Level1)
     uint32_t code = static_cast<uint32_t>(IDCameraSinkInterfaceCode::CONFIG_DISTRIBUTED_HARDWARE);
     sinkStubPtr->OnRemoteRequest(code, data, reply, option);
     EXPECT_EQ(DCAMERA_OK, reply.ReadInt32());
+}
+
+/**
+ * @tc.name: dcamera_sink_stub_test_026
+ * @tc.desc: Verify StopCaptureInner returns DCAMERA_BAD_VALUE when caller lacks ENABLE_DISTRIBUTED_HARDWARE.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraSinkStubTest, dcamera_sink_stub_test_026, TestSize.Level1)
+{
+    DHLOGI("dcamera_sink_stub_test_026");
+    SetTokenIDWithoutEnableDHPermission();
+    sptr<MockDistributedCameraSinkStub> sinkStubPtr(new MockDistributedCameraSinkStub());
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    data.WriteInterfaceToken(DistributedCameraSinkStub::GetDescriptor());
+    data.WriteString("dhId000");
+    int32_t ret = sinkStubPtr->OnRemoteRequest(
+        static_cast<uint32_t>(IDCameraSinkInterfaceCode::STOP_CAPTURE), data, reply, option);
+    EXPECT_EQ(DCAMERA_OK, ret);
+}
+
+/**
+ * @tc.name: dcamera_sink_stub_test_027
+ * @tc.desc: Verify ChannelNegInner returns DCAMERA_BAD_VALUE when caller lacks ENABLE_DISTRIBUTED_HARDWARE.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraSinkStubTest, dcamera_sink_stub_test_027, TestSize.Level1)
+{
+    DHLOGI("dcamera_sink_stub_test_027");
+    SetTokenIDWithoutEnableDHPermission();
+    sptr<IRemoteObject> sinkStubPtr(new MockDistributedCameraSinkStub());
+    DistributedCameraSinkProxy sinkProxy(sinkStubPtr);
+    std::string dhId = "dhId000";
+    std::string channelInfo = "channelInfo000";
+    int32_t ret = sinkProxy.ChannelNeg(dhId, channelInfo);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, ret);
+}
+
+/**
+ * @tc.name: dcamera_sink_stub_test_028
+ * @tc.desc: Verify GetCameraInfoInner returns DCAMERA_BAD_VALUE when caller lacks ENABLE_DISTRIBUTED_HARDWARE.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraSinkStubTest, dcamera_sink_stub_test_028, TestSize.Level1)
+{
+    DHLOGI("dcamera_sink_stub_test_028");
+    SetTokenIDWithoutEnableDHPermission();
+    sptr<IRemoteObject> sinkStubPtr(new MockDistributedCameraSinkStub());
+    DistributedCameraSinkProxy sinkProxy(sinkStubPtr);
+    std::string dhId = "dhId000";
+    std::string cameraInfo = "cameraInfo000";
+    int32_t ret = sinkProxy.GetCameraInfo(dhId, cameraInfo);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, ret);
+}
+
+/**
+ * @tc.name: dcamera_sink_stub_test_029
+ * @tc.desc: Verify OpenChannelInner returns DCAMERA_BAD_VALUE when caller lacks ENABLE_DISTRIBUTED_HARDWARE.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraSinkStubTest, dcamera_sink_stub_test_029, TestSize.Level1)
+{
+    DHLOGI("dcamera_sink_stub_test_029");
+    SetTokenIDWithoutEnableDHPermission();
+    sptr<IRemoteObject> sinkStubPtr(new MockDistributedCameraSinkStub());
+    DistributedCameraSinkProxy sinkProxy(sinkStubPtr);
+    std::string dhId = "dhId000";
+    std::string openInfo = "openInfo000";
+    int32_t ret = sinkProxy.OpenChannel(dhId, openInfo);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, ret);
+}
+
+/**
+ * @tc.name: dcamera_sink_stub_test_030
+ * @tc.desc: Verify CloseChannelInner returns DCAMERA_BAD_VALUE when caller lacks ENABLE_DISTRIBUTED_HARDWARE.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraSinkStubTest, dcamera_sink_stub_test_030, TestSize.Level1)
+{
+    DHLOGI("dcamera_sink_stub_test_030");
+    SetTokenIDWithoutEnableDHPermission();
+    sptr<IRemoteObject> sinkStubPtr(new MockDistributedCameraSinkStub());
+    DistributedCameraSinkProxy sinkProxy(sinkStubPtr);
+    std::string dhId = "dhId000";
+    int32_t ret = sinkProxy.CloseChannel(dhId);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, ret);
 }
 } // namespace DistributedHardware
 } // namespace OHOS

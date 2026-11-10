@@ -61,7 +61,16 @@ DCameraSoftbusSession::~DCameraSoftbusSession()
         }
     }
     sendFuncMap_.clear();
-    eventHandler_ = nullptr;
+    if (eventHandler_ != nullptr) {
+        eventHandler_->RemoveAllEvents();
+        auto runner = eventHandler_->GetEventRunner();
+        if (runner != nullptr) {
+            runner->Stop();
+        }
+        eventHandler_ = nullptr;
+    }
+    listener_ = nullptr;
+    ResetAssembleFrag();
 }
 
 int32_t DCameraSoftbusSession::CloseSession()

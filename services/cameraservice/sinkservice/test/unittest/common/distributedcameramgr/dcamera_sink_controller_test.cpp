@@ -1726,5 +1726,84 @@ HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_check_acl_right
     controller_->sourceTrigFirstTokenId_ = 55555;
     EXPECT_TRUE(controller_->CheckAclRight());
 }
+
+/**
+ * @tc.name: dcamera_sink_controller_test_start_output_task_001
+ * @tc.desc: Verify StartOutputTask dispatches encoder task via shared_from_this and posts EVENT_ENCODER_PREPARED.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_start_output_task_001, TestSize.Level1)
+{
+    auto mockOperator = std::static_pointer_cast<MockCameraOperator>(controller_->operator_);
+    mockOperator->ResetAsyncState();
+
+    DCameraCaptureInfoCmd cmd;
+    cmd.Unmarshal(TEST_CAPTURE_INFO_CMD_JSON);
+    controller_->captureInfosCache_ = cmd.value_;
+    controller_->captureState_ = DCameraSinkController::CAPTURE_IDLE;
+    controller_->isEncoderReady_ = false;
+
+    controller_->StartOutputTask();
+
+    std::this_thread::sleep_for(std::chrono::seconds(TEST_FIVE_S));
+    EXPECT_TRUE(controller_->isEncoderReady_);
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_start_auth_and_op_task_001
+ * @tc.desc: Verify StartAuthAndOpTask dispatches auth task via shared_from_this and posts EVENT_AUTHORIZATION_PREPARED.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_start_auth_and_op_task_001, TestSize.Level1)
+{
+    auto mockOperator = std::static_pointer_cast<MockCameraOperator>(controller_->operator_);
+    mockOperator->ResetAsyncState();
+
+    DCameraCaptureInfoCmd cmd;
+    cmd.Unmarshal(TEST_CAPTURE_INFO_CMD_JSON);
+    controller_->captureInfosCache_ = cmd.value_;
+    controller_->sceneMode_ = 0;
+    controller_->captureState_ = DCameraSinkController::CAPTURE_IDLE;
+    controller_->isAuthorizationReady_ = false;
+
+    controller_->StartAuthAndOpTask();
+
+    std::this_thread::sleep_for(std::chrono::seconds(TEST_FIVE_S));
+    EXPECT_TRUE(controller_->isAuthorizationReady_);
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_on_session_disconnected_lifetime_001
+ * @tc.desc: Verify OnSessionState(DISCONNECTED) async cleanup via shared_from_this does not crash
+ *           when the external shared_ptr is released before the task completes.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_on_session_disconnected_lifetime_001, TestSize.Level1)
+{
+    std::shared_ptr<ICameraSinkAccessControl> accessControl = std::make_shared<DCameraSinkAccessControl>();
+    sptr<IDCameraSinkCallback> sinkCallback(new DCameraSinkCallback());
+    auto ctrl = std::make_shared<DCameraSinkController>(accessControl, sinkCallback);
+
+    ctrl->channel_ = std::make_shared<MockCameraChannel>();
+    ctrl->operator_ = std::make_shared<MockCameraOperator>();
+    std::vector<std::string> cameras = DCameraHandler::GetInstance().GetCameras();
+    std::string dhId = cameras.empty() ? "camrea_0" : cameras[0];
+    ctrl->output_ = std::make_shared<MockDCameraSinkOutput>(dhId, ctrl->operator_);
+    ctrl->dhId_ = dhId;
+    ctrl->srcDevId_ = "test_src_dev";
+    ctrl->sinkCotrEventHandler_ =
+        std::make_shared<DCameraSinkController::DCameraSinkContrEventHandler>(g_eventRunner, ctrl);
+
+    g_sinkConnect = true;
+    ctrl->OnSessionState(DCAMERA_CHANNEL_STATE_DISCONNECTED, "test_network");
+
+    ctrl.reset();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    SUCCEED();
+}
 } // namespace DistributedHardware
 } // namespace OHOS

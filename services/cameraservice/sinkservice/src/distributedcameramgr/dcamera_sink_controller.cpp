@@ -760,23 +760,25 @@ void DCameraSinkController::OnSessionState(int32_t state, std::string networkId)
             }
             break;
         }
-        case DCAMERA_CHANNEL_STATE_DISCONNECTED:
+        case DCAMERA_CHANNEL_STATE_DISCONNECTED: {
             DHLOGI("channel is disconnected");
             if (sinkCallback_ != nullptr) {
                 sinkCallback_->OnHardwareStateChanged(sinkDevId, dhId_, DcameraBusinessState::IDLE);
             }
-            ffrt::submit([this]() {
+            auto self = shared_from_this();
+            ffrt::submit([self]() {
                 DHLOGI("DCameraSinkController::OnSessionState %{public}s new thread session state: %{public}d",
-                    GetAnonyString(dhId_).c_str(), sessionState_);
+                    GetAnonyString(self->dhId_).c_str(), self->sessionState_);
                 prctl(PR_SET_NAME, CHANNEL_DISCONNECTED.c_str());
-                std::lock_guard<std::mutex> autoLock(autoLock_);
-                int32_t ret = CloseChannelInner(srcDevId_);
+                std::lock_guard<std::mutex> autoLock(self->autoLock_);
+                int32_t ret = self->CloseChannelInner(self->srcDevId_);
                 CHECK_AND_LOG(ret != DCAMERA_OK, "close channel failed, ret: %{public}d", ret);
-                srcDevId_.clear();
-                ret = StopCapture();
+                self->srcDevId_.clear();
+                ret = self->StopCapture();
                 CHECK_AND_LOG(ret != DCAMERA_OK, "stop capture failed, ret: %{public}d", ret);
             });
             break;
+        }
         default:
             DHLOGE("unknown session state");
             break;
@@ -837,13 +839,14 @@ int32_t DCameraSinkController::StartCaptureInner(std::vector<std::shared_ptr<DCa
 
 void DCameraSinkController::StartOutputTask()
 {
-    ffrt::submit([this]() {
+    auto self = shared_from_this();
+    ffrt::submit([self]() {
         DHLOGI("Output initialization task start.");
-        int32_t ret = output_->StartCapture(captureInfosCache_);
+        int32_t ret = self->output_->StartCapture(self->captureInfosCache_);
         sptr<Surface> surface = nullptr;
         if (ret == DCAMERA_OK) {
             PropertyCarrier carrier;
-            if (output_->GetProperty(SURFACE, carrier) == DCAMERA_OK) {
+            if (self->output_->GetProperty(SURFACE, carrier) == DCAMERA_OK) {
                 surface = carrier.surface_;
             } else {
                 ret = DCAMERA_BAD_VALUE;
@@ -852,30 +855,31 @@ void DCameraSinkController::StartOutputTask()
         std::shared_ptr<DCameraSurfaceHolder> holder = std::make_shared<DCameraSurfaceHolder>(ret, surface);
         AppExecFwk::InnerEvent::Pointer event = AppExecFwk::InnerEvent::Get(
             DCameraSinkContrEventHandler::EVENT_ENCODER_PREPARED, holder);
-        sinkCotrEventHandler_->SendEvent(event);
+        self->sinkCotrEventHandler_->SendEvent(event);
         }, {}, ffrt::task_attr().name("DCamSinkOutput").qos(ffrt::qos_user_initiated));
 }
 
 void DCameraSinkController::StartAuthAndOpTask()
 {
-    ffrt::submit([this]() {
+    auto self = shared_from_this();
+    ffrt::submit([self]() {
         DHLOGI("Authorization task start.");
         bool authResult = WaitForAuthorization();
         if (!authResult) {
             DHLOGE("Authorization denied or timeout, skip PrepareCapture.");
             AppExecFwk::InnerEvent::Pointer authEvent = AppExecFwk::InnerEvent::Get(
                 DCameraSinkContrEventHandler::EVENT_AUTHORIZATION_PREPARED, 0);
-            sinkCotrEventHandler_->SendEvent(authEvent);
+            self->sinkCotrEventHandler_->SendEvent(authEvent);
             return;
         }
         AppExecFwk::InnerEvent::Pointer authEvent = AppExecFwk::InnerEvent::Get(
             DCameraSinkContrEventHandler::EVENT_AUTHORIZATION_PREPARED, 1);
-        sinkCotrEventHandler_->SendEvent(authEvent);
+        self->sinkCotrEventHandler_->SendEvent(authEvent);
         DHLOGI("Operator preparation task start.");
-        int32_t ret = operator_->PrepareCapture(captureInfosCache_, sceneMode_);
+        int32_t ret = self->operator_->PrepareCapture(self->captureInfosCache_, self->sceneMode_);
         AppExecFwk::InnerEvent::Pointer camEvent = AppExecFwk::InnerEvent::Get(
             DCameraSinkContrEventHandler::EVENT_CAMERA_PREPARED, ret);
-        sinkCotrEventHandler_->SendEvent(camEvent);
+        self->sinkCotrEventHandler_->SendEvent(camEvent);
         }, {}, ffrt::task_attr().name("DCamAuthAndOpPrepare").qos(ffrt::qos_user_initiated));
 }
 
