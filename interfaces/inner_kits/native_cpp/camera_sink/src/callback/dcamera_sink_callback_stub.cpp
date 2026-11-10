@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Huawei Device Co., Ltd.
+ * Copyright (c) 2023-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -59,14 +59,21 @@ int32_t DCameraSinkCallbackStub::OnNotifyResourceInfoInner(MessageParcel &data, 
 {
     DHLOGI("DCameraSinkCallbackStub OnNotifyResourceInfoInner");
     int32_t ret = DCAMERA_OK;
-    bool isSensitive;
-    bool isSameAccout;
-    do {
-        ResourceEventType type = static_cast<ResourceEventType>(data.ReadInt32());
-        std::string subtype = data.ReadString();
-        std::string networkId = data.ReadString();
-        ret = OnNotifyResourceInfo(type, subtype, networkId, isSensitive, isSameAccout);
-    } while (0);
+    bool isSensitive = false;
+    bool isSameAccout = false;
+    int32_t typeValue = data.ReadInt32();
+    if (typeValue < static_cast<int32_t>(ResourceEventType::EVENT_TYPE_QUERY_RESOURCE) ||
+        typeValue > static_cast<int32_t>(ResourceEventType::EVENT_TYPE_CLOSE_PAGE)) {
+        DHLOGE("Invalid ResourceEventType value: %{public}d", typeValue);
+        reply.WriteInt32(DCAMERA_BAD_VALUE);
+        reply.WriteBool(isSensitive);
+        reply.WriteBool(isSameAccout);
+        return DCAMERA_BAD_VALUE;
+    }
+    ResourceEventType type = static_cast<ResourceEventType>(typeValue);
+    std::string subtype = data.ReadString();
+    std::string networkId = data.ReadString();
+    ret = OnNotifyResourceInfo(type, subtype, networkId, isSensitive, isSameAccout);
     reply.WriteInt32(ret);
     reply.WriteBool(isSensitive);
     reply.WriteBool(isSameAccout);

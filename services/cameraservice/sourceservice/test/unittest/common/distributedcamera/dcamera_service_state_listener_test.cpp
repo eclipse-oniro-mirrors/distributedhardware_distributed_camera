@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+#include <chrono>
+#include <thread>
 #include <gtest/gtest.h>
 
 #include "dcamera_service_state_listener.h"
@@ -136,6 +138,71 @@ HWTEST_F(DcameraServiceStateListenerTest, dcamera_service_state_listener_test_00
 
     int32_t ret = testListener_->OnDataSyncTrigger(TEST_DEVICE_ID);
     EXPECT_EQ(DCAMERA_BAD_VALUE, ret);
+}
+
+/**
+ * @tc.name: dcamera_service_state_listener_test_005
+ * @tc.desc: Verify OnRegisterNotify with failure status dispatches async task using captured callback copy.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraServiceStateListenerTest, dcamera_service_state_listener_test_005, TestSize.Level1)
+{
+    DHLOGI("DcameraServiceStateListenerTest::dcamera_service_state_listener_test_005");
+    EXPECT_EQ(false, testListener_ == nullptr);
+
+    sptr<IDCameraSourceCallback> callback(new DCameraSourceCallback());
+    testListener_->SetCallback(callback);
+
+    int32_t status = DCAMERA_BAD_VALUE;
+    int32_t ret = testListener_->OnRegisterNotify(TEST_DEVICE_ID, TEST_CAMERA_DH_ID_0, TEST_REQID, status, TEST_ATTRS);
+    EXPECT_EQ(DCAMERA_OK, ret);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    callback = nullptr;
+}
+
+/**
+ * @tc.name: dcamera_service_state_listener_test_006
+ * @tc.desc: Verify OnRegisterNotify with failure status and no callback returns DCAMERA_OK (async handles nullptr).
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraServiceStateListenerTest, dcamera_service_state_listener_test_006, TestSize.Level1)
+{
+    DHLOGI("DcameraServiceStateListenerTest::dcamera_service_state_listener_test_006");
+    EXPECT_EQ(false, testListener_ == nullptr);
+
+    int32_t status = DCAMERA_BAD_VALUE;
+    int32_t ret = testListener_->OnRegisterNotify(TEST_DEVICE_ID, TEST_CAMERA_DH_ID_0, TEST_REQID, status, TEST_ATTRS);
+    EXPECT_EQ(DCAMERA_OK, ret);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
+/**
+ * @tc.name: dcamera_service_state_listener_test_007
+ * @tc.desc: Verify OnUnregisterNotify with success status dispatches async task using captured callback copy
+ *           and the nullptr check in the lambda is exercised.
+ * @tc.type: FUNC
+ * @tc.require: issue
+ */
+HWTEST_F(DcameraServiceStateListenerTest, dcamera_service_state_listener_test_007, TestSize.Level1)
+{
+    DHLOGI("DcameraServiceStateListenerTest::dcamera_service_state_listener_test_007");
+    EXPECT_EQ(false, testListener_ == nullptr);
+
+    sptr<IDCameraSourceCallback> callback(new DCameraSourceCallback());
+    testListener_->SetCallback(callback);
+
+    int32_t status = DCAMERA_OK;
+    int32_t ret = testListener_->OnUnregisterNotify(TEST_DEVICE_ID, TEST_CAMERA_DH_ID_0, TEST_REQID, status,
+        TEST_ATTRS);
+    EXPECT_EQ(DCAMERA_OK, ret);
+
+    testListener_->SetCallback(nullptr);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    callback = nullptr;
 }
 } // namespace DistributedHardware
 } // namespace OHOS

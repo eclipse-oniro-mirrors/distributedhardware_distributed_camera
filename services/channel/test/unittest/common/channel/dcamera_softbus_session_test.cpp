@@ -675,5 +675,110 @@ HWTEST_F(DCameraSoftbusSessionTest, dcamera_softbus_session_test_030, TestSize.L
     int32_t ret = softbusSession_->BindSocketServer();
     EXPECT_TRUE(ret == 0 || ret == DCAMERA_BAD_VALUE || ret != DCAMERA_OK);
 }
+
+/**
+ * @tc.name: dcamera_softbus_session_test_031
+ * @tc.desc: Verify destructor cleans up eventHandler_ (RemoveAllEvents + runner.Stop) without crash.
+ * @tc.type: FUNC
+ * @tc.require:
+ */
+HWTEST_F(DCameraSoftbusSessionTest, dcamera_softbus_session_test_031, TestSize.Level1)
+{
+    std::string myDhId = "dhId_031";
+    std::string myDevId = TEST_MYDEVICE_ID;
+    std::string mySessionName = "testsession031";
+    std::string peerSessionName = "testpeersession031";
+    std::string peerDevId = TEST_PEERDEVICE_ID;
+    DCameraSessionMode sessionMode = DCAMERA_SESSION_MODE_VIDEO;
+    auto session = std::make_shared<DCameraSoftbusSession>(myDhId, myDevId, mySessionName, peerDevId,
+        peerSessionName, listener_, sessionMode);
+    EXPECT_NE(nullptr, session);
+    EXPECT_NE(nullptr, session->eventHandler_);
+
+    auto runner = session->eventHandler_->GetEventRunner();
+    EXPECT_NE(nullptr, runner);
+
+    session->sessionId_ = -1;
+    session.reset();
+    SUCCEED();
+}
+
+/**
+ * @tc.name: dcamera_softbus_session_test_032
+ * @tc.desc: Verify destructor cleans up listener_ and assembled fragment data without crash.
+ * @tc.type: FUNC
+ * @tc.require:
+ */
+HWTEST_F(DCameraSoftbusSessionTest, dcamera_softbus_session_test_032, TestSize.Level1)
+{
+    std::string myDhId = "dhId_032";
+    std::string myDevId = TEST_MYDEVICE_ID;
+    std::string mySessionName = "testsession032";
+    std::string peerSessionName = "testpeersession032";
+    std::string peerDevId = TEST_PEERDEVICE_ID;
+    DCameraSessionMode sessionMode = DCAMERA_SESSION_MODE_JPEG;
+    auto session = std::make_shared<DCameraSoftbusSession>(myDhId, myDevId, mySessionName, peerDevId,
+        peerSessionName, listener_, sessionMode);
+    EXPECT_NE(nullptr, session);
+    EXPECT_NE(nullptr, session->listener_);
+
+    size_t capacity = 64;
+    session->packBuffer_ = std::make_shared<DataBuffer>(capacity);
+    session->isWaiting_ = true;
+    session->nowSeq_ = 5;
+    session->nowSubSeq_ = 3;
+    session->offset_ = 32;
+    session->totalLen_ = 1024;
+    session->sessionId_ = -1;
+
+    session.reset();
+    SUCCEED();
+}
+
+/**
+ * @tc.name: dcamera_softbus_session_test_033
+ * @tc.desc: Verify destructor with eventHandler_ == nullptr (default-constructed session) does not crash.
+ * @tc.type: FUNC
+ * @tc.require:
+ */
+HWTEST_F(DCameraSoftbusSessionTest, dcamera_softbus_session_test_033, TestSize.Level1)
+{
+    auto session = std::make_shared<DCameraSoftbusSession>();
+    EXPECT_NE(nullptr, session);
+    EXPECT_EQ(nullptr, session->eventHandler_);
+
+    session.reset();
+    SUCCEED();
+}
+
+/**
+ * @tc.name: dcamera_softbus_session_test_034
+ * @tc.desc: Verify destructor cleans up eventHandler_ when events are pending in the queue.
+ * @tc.type: FUNC
+ * @tc.require:
+ */
+HWTEST_F(DCameraSoftbusSessionTest, dcamera_softbus_session_test_034, TestSize.Level1)
+{
+    std::string myDhId = "dhId_034";
+    std::string myDevId = TEST_MYDEVICE_ID;
+    std::string mySessionName = "testsession034";
+    std::string peerSessionName = "testpeersession034";
+    std::string peerDevId = TEST_PEERDEVICE_ID;
+    DCameraSessionMode sessionMode = DCAMERA_SESSION_MODE_VIDEO;
+    auto session = std::make_shared<DCameraSoftbusSession>(myDhId, myDevId, mySessionName, peerDevId,
+        peerSessionName, listener_, sessionMode);
+    EXPECT_NE(nullptr, session);
+
+    auto runner = AppExecFwk::EventRunner::Create(mySessionName);
+    session->eventHandler_ = std::make_shared<AppExecFwk::EventHandler>(runner);
+    session->sessionId_ = -1;
+
+    size_t capacity = 1;
+    std::shared_ptr<DataBuffer> buffer = std::make_shared<DataBuffer>(capacity);
+    session->eventHandler_->PostTask([buffer]() { (void)buffer; });
+
+    session.reset();
+    SUCCEED();
+}
 }
 }

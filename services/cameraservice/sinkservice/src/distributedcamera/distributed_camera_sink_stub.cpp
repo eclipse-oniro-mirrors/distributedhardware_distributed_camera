@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023 Huawei Device Co., Ltd.
+ * Copyright (c) 2021-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -220,6 +220,11 @@ int32_t DistributedCameraSinkStub::StopCaptureInner(MessageParcel &data, Message
     DHLOGD("enter");
     int32_t ret = DCAMERA_OK;
     do {
+        if (IPCSkeleton::IsLocalCalling() && !HasEnableDHPermission()) {
+            DHLOGE("The caller has no ENABLE_DISTRIBUTED_HARDWARE permission.");
+            ret = DCAMERA_BAD_VALUE;
+            break;
+        }
         std::string dhId = data.ReadString();
         if (dhId.empty() || dhId.size() > DID_MAX_SIZE) {
             DHLOGE("params is invalid");
@@ -237,6 +242,11 @@ int32_t DistributedCameraSinkStub::ChannelNegInner(MessageParcel &data, MessageP
     DHLOGD("enter");
     int32_t ret = DCAMERA_OK;
     do {
+        if (IPCSkeleton::IsLocalCalling() && !HasEnableDHPermission()) {
+            DHLOGE("The caller has no ENABLE_DISTRIBUTED_HARDWARE permission.");
+            ret = DCAMERA_BAD_VALUE;
+            break;
+        }
         std::string dhId = data.ReadString();
         std::string channelInfo = data.ReadString();
         if (dhId.empty() || dhId.size() > DID_MAX_SIZE || channelInfo.empty() ||
@@ -256,6 +266,11 @@ int32_t DistributedCameraSinkStub::GetCameraInfoInner(MessageParcel &data, Messa
     DHLOGD("enter");
     int32_t ret = DCAMERA_OK;
     do {
+        if (IPCSkeleton::IsLocalCalling() && !HasEnableDHPermission()) {
+            DHLOGE("The caller has no ENABLE_DISTRIBUTED_HARDWARE permission.");
+            ret = DCAMERA_BAD_VALUE;
+            break;
+        }
         std::string dhId = data.ReadString();
         std::string cameraInfo = data.ReadString();
         if (dhId.empty() || dhId.size() > DID_MAX_SIZE) {
@@ -274,6 +289,11 @@ int32_t DistributedCameraSinkStub::OpenChannelInner(MessageParcel &data, Message
     DHLOGD("DistributedCameraSinkStub OpenChannelInner Begin");
     int32_t ret = DCAMERA_OK;
     do {
+        if (IPCSkeleton::IsLocalCalling() && !HasEnableDHPermission()) {
+            DHLOGE("The caller has no ENABLE_DISTRIBUTED_HARDWARE permission.");
+            ret = DCAMERA_BAD_VALUE;
+            break;
+        }
         std::string dhId = data.ReadString();
         std::string openInfo = data.ReadString();
         if (dhId.empty() || dhId.size() > DID_MAX_SIZE || openInfo.empty()||
@@ -294,6 +314,11 @@ int32_t DistributedCameraSinkStub::CloseChannelInner(MessageParcel &data, Messag
     DHLOGD("enter");
     int32_t ret = DCAMERA_OK;
     do {
+        if (IPCSkeleton::IsLocalCalling() && !HasEnableDHPermission()) {
+            DHLOGE("The caller has no ENABLE_DISTRIBUTED_HARDWARE permission.");
+            ret = DCAMERA_BAD_VALUE;
+            break;
+        }
         std::string dhId = data.ReadString();
         if (dhId.empty() || dhId.size() > DID_MAX_SIZE) {
             DHLOGE("params is invalid");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023 Huawei Device Co., Ltd.
+ * Copyright (c) 2021-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -53,17 +53,18 @@ int32_t DCameraServiceStateListener::OnRegisterNotify(const std::string& devId, 
     std::lock_guard<std::mutex> autoLock(proxyMutex_);
 
     if (status != DCAMERA_OK) {
-        ffrt::submit([=]() mutable {
+        sptr<IDCameraSourceCallback> callback = callbackProxy_;
+        ffrt::submit([callback, devId, dhId, reqId, status, data]() mutable {
             DHLOGI("thread delete devId: %{public}s dhId: %{public}s", GetAnonyString(devId).c_str(),
                 GetAnonyString(dhId).c_str());
             prctl(PR_SET_NAME, REGISTER_SERVICE_NOTIFY.c_str());
             DCameraIndex camIndex(devId, dhId);
             DistributedCameraSourceService::CamDevErase(camIndex);
-            if (callbackProxy_ == nullptr) {
+            if (callback == nullptr) {
                 DHLOGE("callbackProxy_ is nullptr");
                 return;
             }
-            int32_t ret = callbackProxy_->OnNotifyRegResult(devId, dhId, reqId, status, data);
+            int32_t ret = callback->OnNotifyRegResult(devId, dhId, reqId, status, data);
             if (ret != DCAMERA_OK) {
                 DHLOGE("OnNotifyRegResult failed: %{public}d", ret);
             }
@@ -93,14 +94,20 @@ int32_t DCameraServiceStateListener::OnUnregisterNotify(const std::string& devId
     }
 
     if (status == DCAMERA_OK) {
-        ffrt::submit([=]() mutable {
+        sptr<IDCameraSourceCallback> callback = callbackProxy_;
+        ffrt::submit([callback, devId, dhId, reqId, status, data]() mutable {
             DHLOGI("thread delete devId: %{public}s dhId: %{public}s", GetAnonyString(devId).c_str(),
                 GetAnonyString(dhId).c_str());
             prctl(PR_SET_NAME, UNREGISTER_SERVICE_NOTIFY.c_str());
             DCameraIndex camIndex(devId, dhId);
             DistributedCameraSourceService::CamDevErase(camIndex);
 
-            int32_t ret = callbackProxy_->OnNotifyUnregResult(devId, dhId, reqId, status, data);
+            if (callback == nullptr) {
+                DHLOGE("callbackProxy_ is nullptr");
+                return;
+            }
+
+            int32_t ret = callback->OnNotifyUnregResult(devId, dhId, reqId, status, data);
             if (ret != DCAMERA_OK) {
                 DHLOGE("OnNotifyUnregResult failed, ret: %{public}d", ret);
             }
