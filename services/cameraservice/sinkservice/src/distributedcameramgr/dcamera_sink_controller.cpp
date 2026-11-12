@@ -130,53 +130,74 @@ int32_t DCameraSinkController::StartCapture(std::vector<std::shared_ptr<DCameraC
 int32_t DCameraSinkController::StopCapture()
 {
     DHLOGI("StopCapture dhId: %{public}s", GetAnonyString(dhId_).c_str());
-    std::unique_lock<std::mutex> lock(captureStateMutex_);
-    if (!captureStateCv_.wait_for(lock, std::chrono::seconds(MAX_RETRY_TIMES_),
-        [this] { return captureState_ != CAPTURE_STARTING; })) {
-        DHLOGE("StopCapture timed out waiting for state to change from STARTING. dhId: %{public}s",
-               GetAnonyString(dhId_).c_str());
-        return DCAMERA_WRONG_STATE;
-    }
-    if (captureState_ == CAPTURE_IDLE) {
-        DHLOGI("StopCapture called when state is already IDLE. dhId: %{public}s", GetAnonyString(dhId_).c_str());
-        return DCAMERA_OK;
-    }
-    if (captureState_ == CAPTURE_ERROR) {
-        DHLOGI("StopCapture cleaning up after capture error. dhId: %{public}s", GetAnonyString(dhId_).c_str());
+    StopNotifyInfo info;
+    {
+        std::unique_lock<std::mutex> lock(captureStateMutex_);
+        if (!captureStateCv_.wait_for(lock, std::chrono::seconds(MAX_RETRY_TIMES_),
+            [this] { return captureState_ != CAPTURE_STARTING; })) {
+            DHLOGE("StopCapture timed out waiting for state to change from STARTING. dhId: %{public}s",
+                GetAnonyString(dhId_).c_str());
+            return DCAMERA_WRONG_STATE;
+        }
+        if (captureState_ == CAPTURE_IDLE) {
+            DHLOGI("StopCapture called when state is already IDLE. dhId: %{public}s", GetAnonyString(dhId_).c_str());
+            return DCAMERA_OK;
+        }
+        if (captureState_ == CAPTURE_ERROR) {
+            return StopCaptureAfterError();
+        }
         captureState_ = CAPTURE_IDLE;
-        if (operator_ != nullptr) {
-            int32_t ret = operator_->StopCapture();
-            if (ret != DCAMERA_OK) {
-                DHLOGE("StopCapture operator stop capture failed after error, ret: %{public}d", ret);
-            }
-        }
-        if (output_ != nullptr) {
-            int32_t ret = output_->StopCapture();
-            if (ret != DCAMERA_OK) {
-                DHLOGE("StopCapture output stop capture failed after error, ret: %{public}d", ret);
-            }
-        }
-        DHLOGI("StopCapture cleaning up after capture error %{public}s success", GetAnonyString(dhId_).c_str());
-        return DCAMERA_OK;
+        StopOperatorAndOutput(info);
+        DHLOGI("StopCapture %{public}s success", GetAnonyString(dhId_).c_str());
     }
+    if (info.needNotify) {
+        DCameraNotifyInner(DCAMERA_MESSAGE, info.result, info.reason);
+    }
+    return DCAMERA_OK;
+}
+
+int32_t DCameraSinkController::StopCaptureAfterError()
+{
+    DHLOGI("StopCapture cleaning up after capture error. dhId: %{public}s", GetAnonyString(dhId_).c_str());
     captureState_ = CAPTURE_IDLE;
     if (operator_ != nullptr) {
         int32_t ret = operator_->StopCapture();
         if (ret != DCAMERA_OK) {
-            DHLOGE("client stop capture failed, dhId: %{public}s, ret: %{public}d", GetAnonyString(dhId_).c_str(), ret);
-            DCameraNotifyInner(DCAMERA_MESSAGE, DCAMERA_EVENT_DEVICE_ERROR,
-                std::string("operator stop capture failed."));
+            DHLOGE("StopCapture operator stop capture failed after error, ret: %{public}d", ret);
         }
     }
     if (output_ != nullptr) {
         int32_t ret = output_->StopCapture();
         if (ret != DCAMERA_OK) {
-            DHLOGE("output stop capture failed, dhId: %{public}s, ret: %{public}d", GetAnonyString(dhId_).c_str(), ret);
-            DCameraNotifyInner(DCAMERA_MESSAGE, DCAMERA_EVENT_DEVICE_ERROR, std::string("output stop capture failed"));
+            DHLOGE("StopCapture output stop capture failed after error, ret: %{public}d", ret);
         }
     }
-    DHLOGI("StopCapture %{public}s success", GetAnonyString(dhId_).c_str());
+    DHLOGI("StopCapture cleaning up after capture error %{public}s success", GetAnonyString(dhId_).c_str());
     return DCAMERA_OK;
+}
+
+void DCameraSinkController::StopOperatorAndOutput(StopNotifyInfo& info)
+{
+    if (operator_ != nullptr) {
+        int32_t ret = operator_->StopCapture();
+        if (ret != DCAMERA_OK) {
+            DHLOGE("client stop capture failed, dhId: %{public}s, ret: %{public}d",
+                GetAnonyString(dhId_).c_str(), ret);
+            info.needNotify = true;
+            info.result = DCAMERA_EVENT_DEVICE_ERROR;
+            info.reason = "operator stop capture failed.";
+        }
+    }
+    if (output_ != nullptr) {
+        int32_t ret = output_->StopCapture();
+        if (ret != DCAMERA_OK) {
+            DHLOGE("output stop capture failed, dhId: %{public}s, ret: %{public}d",
+                GetAnonyString(dhId_).c_str(), ret);
+            info.needNotify = true;
+            info.result = DCAMERA_EVENT_DEVICE_ERROR;
+            info.reason = "output stop capture failed";
+        }
+    }
 }
 
 int32_t DCameraSinkController::ChannelNeg(std::shared_ptr<DCameraChannelInfo>& info)
@@ -578,34 +599,60 @@ void DCameraSinkController::OnEncoderPrepared(const AppExecFwk::InnerEvent::Poin
     if (holder == nullptr) {
         return;
     }
-    std::lock_guard<std::mutex> lock(captureStateMutex_);
-    isEncoderReady_ = true;
-    encoderResult_ = holder->result;
-    preparedSurface_ = holder->surface;
-    CheckAndCommitCapture();
+    CaptureNotifyAction action;
+    {
+        std::lock_guard<std::mutex> lock(captureStateMutex_);
+        isEncoderReady_ = true;
+        encoderResult_ = holder->result;
+        preparedSurface_ = holder->surface;
+        CheckAndCommitCapture(action);
+    }
+    if (action.needHandleError) {
+        HandleCaptureError(action.errorCode, action.errorMsg);
+    } else if (action.needNotifySuccess) {
+        DCameraNotifyInner(DCAMERA_MESSAGE, DCAMERA_EVENT_CAMERA_SUCCESS, START_CAPTURE_SUCC);
+    }
 }
 
 void DCameraSinkController::OnCameraPrepared(const AppExecFwk::InnerEvent::Pointer &event)
 {
     int32_t result = event->GetParam();
-    std::lock_guard<std::mutex> lock(captureStateMutex_);
-    isCameraReady_ = true;
-    cameraResult_ = result;
-    CheckAndCommitCapture();
+    CaptureNotifyAction action;
+    {
+        std::lock_guard<std::mutex> lock(captureStateMutex_);
+        isCameraReady_ = true;
+        cameraResult_ = result;
+        CheckAndCommitCapture(action);
+    }
+    if (action.needHandleError) {
+        HandleCaptureError(action.errorCode, action.errorMsg);
+    } else if (action.needNotifySuccess) {
+        DCameraNotifyInner(DCAMERA_MESSAGE, DCAMERA_EVENT_CAMERA_SUCCESS, START_CAPTURE_SUCC);
+    }
 }
 
 void DCameraSinkController::OnAuthorizationPrepared(const AppExecFwk::InnerEvent::Pointer &event)
 {
     int32_t result = event->GetParam();
-    std::lock_guard<std::mutex> lock(captureStateMutex_);
-    isAuthorizationReady_ = true;
-    authorizationResult_ = (result == 1);
-    if (!authorizationResult_) {
-        captureState_ = CAPTURE_ERROR;
-        captureStateCv_.notify_all();
-        HandleCaptureError(DCAMERA_ALLOC_ERROR, "commit capture no permission.");
-    } else {
-        CheckAndCommitCapture();
+    CaptureNotifyAction action;
+    {
+        std::lock_guard<std::mutex> lock(captureStateMutex_);
+        isAuthorizationReady_ = true;
+        authorizationResult_ = (result == 1);
+        if (!authorizationResult_) {
+            captureState_ = CAPTURE_ERROR;
+            captureStateCv_.notify_all();
+            action.needHandleError = true;
+            action.errorCode = DCAMERA_ALLOC_ERROR;
+            action.errorMsg = "commit capture no permission.";
+        } else {
+            CheckAndCommitCapture(action);
+        }
+    }
+    if (action.needHandleError) {
+        HandleCaptureError(action.errorCode, action.errorMsg);
+    } else if (action.needNotifySuccess) {
+        DCameraNotifyInner(DCAMERA_MESSAGE, DCAMERA_EVENT_CAMERA_SUCCESS, START_CAPTURE_SUCC);
     }
 }
 
@@ -630,7 +677,7 @@ static bool WaitForAuthorization()
     return true;
 }
 
-void DCameraSinkController::CheckAndCommitCapture()
+void DCameraSinkController::CheckAndCommitCapture(CaptureNotifyAction& action)
 {
     if (!isEncoderReady_ || !isCameraReady_) {
         DHLOGI("Waiting... EncoderReady: %{public}d, CameraReady: %{public}d",
@@ -652,7 +699,9 @@ void DCameraSinkController::CheckAndCommitCapture()
         }
         captureState_ = CAPTURE_ERROR;
         captureStateCv_.notify_all();
-        HandleCaptureError(finalErrorCode, errorMsg);
+        action.needHandleError = true;
+        action.errorCode = finalErrorCode;
+        action.errorMsg = errorMsg;
         return;
     }
 
@@ -662,13 +711,14 @@ void DCameraSinkController::CheckAndCommitCapture()
         DHLOGE("CommitCapture failed, ret: %{public}d", ret);
         captureState_ = CAPTURE_ERROR;
         captureStateCv_.notify_all();
-        HandleCaptureError(ret, "commit capture failed.");
+        action.needHandleError = true;
+        action.errorCode = ret;
+        action.errorMsg = "commit capture failed.";
         return;
     }
     captureState_ = CAPTURE_RUNNING;
     captureStateCv_.notify_all();
-
-    DCameraNotifyInner(DCAMERA_MESSAGE, DCAMERA_EVENT_CAMERA_SUCCESS, START_CAPTURE_SUCC);
+    action.needNotifySuccess = true;
     DHLOGI("CheckAndCommitCapture successfully started capture.");
 }
 

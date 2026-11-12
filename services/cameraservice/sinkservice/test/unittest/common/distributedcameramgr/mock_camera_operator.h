@@ -104,6 +104,9 @@ public:
 
     int32_t CommitCapture(sptr<Surface>& surface)
     {
+        if (g_operatorStr == "test_commit_capture_failed") {
+            return DCAMERA_BAD_VALUE;
+        }
         {
             std::lock_guard<std::mutex> lock(mtx_);
             asyncOperationState = commitCaptureState;

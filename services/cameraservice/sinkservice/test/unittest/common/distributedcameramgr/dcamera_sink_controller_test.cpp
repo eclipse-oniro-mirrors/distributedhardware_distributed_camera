@@ -1530,12 +1530,14 @@ HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_check_commit_ca
     controller_->authorizationResult_ = true;
     controller_->captureState_ = DCameraSinkController::CAPTURE_STARTING;
 
-    controller_->CheckAndCommitCapture();
+    DCameraSinkController::CaptureNotifyAction action;
+    controller_->CheckAndCommitCapture(action);
     EXPECT_EQ(DCameraSinkController::CAPTURE_STARTING, controller_->captureState_);
 
     controller_->isEncoderReady_ = true;
     controller_->isCameraReady_ = false;
-    controller_->CheckAndCommitCapture();
+    DCameraSinkController::CaptureNotifyAction action2;
+    controller_->CheckAndCommitCapture(action2);
     EXPECT_EQ(DCameraSinkController::CAPTURE_STARTING, controller_->captureState_);
 }
 
@@ -1556,6 +1558,162 @@ HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_encoder_prepare
 
     controller_->OnEncoderPrepared(event);
     EXPECT_FALSE(controller_->isEncoderReady_);
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_check_commit_error_camera_001
+ * @tc.desc: Verify CheckAndCommitCapture sets needHandleError when cameraResult_ fails.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_check_commit_error_camera_001, TestSize.Level1)
+{
+    controller_->isEncoderReady_ = true;
+    controller_->isCameraReady_ = true;
+    controller_->cameraResult_ = DCAMERA_BAD_VALUE;
+    controller_->encoderResult_ = DCAMERA_OK;
+    controller_->captureState_ = DCameraSinkController::CAPTURE_STARTING;
+
+    DCameraSinkController::CaptureNotifyAction action;
+    controller_->CheckAndCommitCapture(action);
+    EXPECT_TRUE(action.needHandleError);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, action.errorCode);
+    EXPECT_EQ("camera preparation failed.", action.errorMsg);
+    EXPECT_EQ(DCameraSinkController::CAPTURE_ERROR, controller_->captureState_);
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_check_commit_error_encoder_001
+ * @tc.desc: Verify CheckAndCommitCapture sets needHandleError when encoderResult_ fails.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_check_commit_error_encoder_001, TestSize.Level1)
+{
+    controller_->isEncoderReady_ = true;
+    controller_->isCameraReady_ = true;
+    controller_->cameraResult_ = DCAMERA_OK;
+    controller_->encoderResult_ = DCAMERA_BAD_VALUE;
+    controller_->captureState_ = DCameraSinkController::CAPTURE_STARTING;
+
+    DCameraSinkController::CaptureNotifyAction action;
+    controller_->CheckAndCommitCapture(action);
+    EXPECT_TRUE(action.needHandleError);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, action.errorCode);
+    EXPECT_EQ("output start capture failed", action.errorMsg);
+    EXPECT_EQ(DCameraSinkController::CAPTURE_ERROR, controller_->captureState_);
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_check_commit_success_001
+ * @tc.desc: Verify CheckAndCommitCapture sets needNotifySuccess and CAPTURE_RUNNING on success.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_check_commit_success_001, TestSize.Level1)
+{
+    sptr<IConsumerSurface> consumerSurface = IConsumerSurface::Create("test_surface");
+    sptr<IBufferProducer> producer = consumerSurface->GetProducer();
+    sptr<Surface> mockSurface = Surface::CreateSurfaceAsProducer(producer);
+
+    controller_->isEncoderReady_ = true;
+    controller_->isCameraReady_ = true;
+    controller_->cameraResult_ = DCAMERA_OK;
+    controller_->encoderResult_ = DCAMERA_OK;
+    controller_->preparedSurface_ = mockSurface;
+    controller_->captureState_ = DCameraSinkController::CAPTURE_STARTING;
+
+    auto mockOperator = std::static_pointer_cast<MockCameraOperator>(controller_->operator_);
+    mockOperator->ResetAsyncState();
+
+    DCameraSinkController::CaptureNotifyAction action;
+    controller_->CheckAndCommitCapture(action);
+    EXPECT_TRUE(action.needNotifySuccess);
+    EXPECT_FALSE(action.needHandleError);
+    EXPECT_EQ(DCameraSinkController::CAPTURE_RUNNING, controller_->captureState_);
+
+    controller_->captureState_ = DCameraSinkController::CAPTURE_IDLE;
+    mockOperator->ResetAsyncState();
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_check_commit_commit_fail_001
+ * @tc.desc: Verify CheckAndCommitCapture sets needHandleError when CommitCapture fails.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_check_commit_commit_fail_001, TestSize.Level1)
+{
+    sptr<IConsumerSurface> consumerSurface = IConsumerSurface::Create("test_surface");
+    sptr<IBufferProducer> producer = consumerSurface->GetProducer();
+    sptr<Surface> mockSurface = Surface::CreateSurfaceAsProducer(producer);
+
+    controller_->isEncoderReady_ = true;
+    controller_->isCameraReady_ = true;
+    controller_->cameraResult_ = DCAMERA_OK;
+    controller_->encoderResult_ = DCAMERA_OK;
+    controller_->preparedSurface_ = mockSurface;
+    controller_->captureState_ = DCameraSinkController::CAPTURE_STARTING;
+
+    g_operatorStr = "test_commit_capture_failed";
+    DCameraSinkController::CaptureNotifyAction action;
+    controller_->CheckAndCommitCapture(action);
+    EXPECT_TRUE(action.needHandleError);
+    EXPECT_EQ(DCAMERA_BAD_VALUE, action.errorCode);
+    EXPECT_EQ("commit capture failed.", action.errorMsg);
+    EXPECT_EQ(DCameraSinkController::CAPTURE_ERROR, controller_->captureState_);
+
+    g_operatorStr = "";
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_stop_capture_error_state_001
+ * @tc.desc: Verify StopCapture on CAPTURE_ERROR calls StopCaptureAfterError, sets IDLE,
+ *           stops operator and output, returns OK without notify.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_stop_capture_error_state_001, TestSize.Level1)
+{
+    controller_->captureState_ = DCameraSinkController::CAPTURE_ERROR;
+    auto mockOperator = std::static_pointer_cast<MockCameraOperator>(controller_->operator_);
+    auto mockOutput = std::static_pointer_cast<MockDCameraSinkOutput>(controller_->output_);
+    auto mockChannel = std::static_pointer_cast<MockCameraChannel>(controller_->channel_);
+    mockOperator->ResetAsyncState();
+
+    int32_t ret = controller_->StopCapture();
+    EXPECT_EQ(DCAMERA_OK, ret);
+    EXPECT_EQ(DCameraSinkController::CAPTURE_IDLE, controller_->captureState_);
+    EXPECT_TRUE(mockOperator->stopCaptureFinished);
+    EXPECT_TRUE(mockOutput->stopCaptureCalled);
+    EXPECT_EQ(0, mockChannel->sendDataCount);
+
+    mockOperator->ResetAsyncState();
+}
+
+/**
+ * @tc.name: dcamera_sink_controller_test_stop_capture_notify_on_fail_001
+ * @tc.desc: Verify StopCapture notifies DCAMERA_EVENT_DEVICE_ERROR outside lock
+ *           when operator_->StopCapture fails.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_stop_capture_notify_on_fail_001, TestSize.Level1)
+{
+    controller_->captureState_ = DCameraSinkController::CAPTURE_RUNNING;
+    auto mockOperator = std::static_pointer_cast<MockCameraOperator>(controller_->operator_);
+    auto mockChannel = std::static_pointer_cast<MockCameraChannel>(controller_->channel_);
+    mockOperator->ResetAsyncState();
+
+    g_operatorStr = "test_stop_capture_failed";
+    int32_t ret = controller_->StopCapture();
+    EXPECT_EQ(DCAMERA_OK, ret);
+    EXPECT_EQ(DCameraSinkController::CAPTURE_IDLE, controller_->captureState_);
+    EXPECT_GT(mockChannel->sendDataCount, 0);
+    EXPECT_NE(mockChannel->lastSentData.find("operator stop capture failed"), std::string::npos);
+
+    g_operatorStr = "";
+    mockOperator->ResetAsyncState();
 }
 #endif
 

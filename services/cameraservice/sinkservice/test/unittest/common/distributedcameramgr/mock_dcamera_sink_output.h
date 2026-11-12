@@ -54,8 +54,11 @@ public:
         return DCAMERA_OK;
     }
 
+    bool stopCaptureCalled = false;
+
     int32_t StopCapture() override
     {
+        stopCaptureCalled = true;
         if (g_outputStr == "test_stop_capture_failed") {
             return DCAMERA_ALLOC_ERROR;
         }

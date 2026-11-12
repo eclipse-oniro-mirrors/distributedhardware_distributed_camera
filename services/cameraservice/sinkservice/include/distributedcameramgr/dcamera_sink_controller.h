@@ -111,13 +111,26 @@ private:
         int32_t result;
         sptr<Surface> surface;
     };
+    struct CaptureNotifyAction {
+        bool needHandleError = false;
+        int32_t errorCode = DCAMERA_OK;
+        std::string errorMsg;
+        bool needNotifySuccess = false;
+    };
     void HandleCaptureError(int32_t errorCode, const std::string& errorMsg);
-    void CheckAndCommitCapture();
+    void CheckAndCommitCapture(CaptureNotifyAction& action);
     void OnEncoderPrepared(const AppExecFwk::InnerEvent::Pointer &event);
     void OnCameraPrepared(const AppExecFwk::InnerEvent::Pointer &event);
     void OnAuthorizationPrepared(const AppExecFwk::InnerEvent::Pointer &event);
     void StartOutputTask();
     void StartAuthAndOpTask();
+    struct StopNotifyInfo {
+        bool needNotify = false;
+        int32_t result = DCAMERA_OK;
+        std::string reason;
+    };
+    int32_t StopCaptureAfterError();
+    void StopOperatorAndOutput(StopNotifyInfo& info);
 
     std::atomic<bool> isEncoderReady_ {false};
     std::atomic<bool> isCameraReady_ {false};

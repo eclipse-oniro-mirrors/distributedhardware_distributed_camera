@@ -1064,6 +1064,45 @@ HWTEST_F(DecodeDataProcessTest, decode_data_process_test_030, TestSize.Level1)
     rc = testDecodeDataProcess_->UpdateSettings(metaData);
     EXPECT_EQ(rc, DCAMERA_OK);
 }
+
+/**
+ * @tc.name: decode_data_process_test_release_clears_eis_queue_001
+ * @tc.desc: Verify ReleaseProcessNode clears eisInfoQueue_ and frameInfoDeque_ under mtxDequeLock_.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DecodeDataProcessTest, decode_data_process_test_release_clears_eis_queue_001, TestSize.Level1)
+{
+    DHLOGI("DecodeDataProcessTest decode_data_process_test_release_clears_eis_queue_001");
+    EXPECT_EQ(false, testDecodeDataProcess_ == nullptr);
+
+    VideoConfigParams srcParams(VideoCodecType::CODEC_H264, Videoformat::NV12,
+        DCAMERA_PRODUCER_FPS_DEFAULT, TEST_WIDTH2, TEST_HEIGTH2);
+    VideoConfigParams destParams(VideoCodecType::NO_CODEC, Videoformat::NV21,
+        DCAMERA_PRODUCER_FPS_DEFAULT, TEST_WIDTH2, TEST_HEIGTH2);
+    VideoConfigParams procConfig;
+    int32_t rc = testDecodeDataProcess_->InitNode(srcParams, destParams, procConfig);
+    EXPECT_EQ(rc, DCAMERA_OK);
+
+    EisInfo eisInfo;
+    eisInfo.frameId = 1;
+    eisInfo.frameTimeStamp = 1000;
+    testDecodeDataProcess_->eisInfoQueue_.push(eisInfo);
+    testDecodeDataProcess_->eisInfoQueue_.push(eisInfo);
+
+    DCameraFrameInfo frameInfo;
+    frameInfo.index = 1;
+    testDecodeDataProcess_->frameInfoDeque_.push_back(frameInfo);
+    testDecodeDataProcess_->frameInfoDeque_.push_back(frameInfo);
+
+    EXPECT_EQ(static_cast<size_t>(2), testDecodeDataProcess_->eisInfoQueue_.size());
+    EXPECT_EQ(static_cast<size_t>(2), testDecodeDataProcess_->frameInfoDeque_.size());
+
+    testDecodeDataProcess_->ReleaseProcessNode();
+
+    EXPECT_EQ(true, testDecodeDataProcess_->eisInfoQueue_.empty());
+    EXPECT_EQ(true, testDecodeDataProcess_->frameInfoDeque_.empty());
+}
 #endif
 } // namespace DistributedHardware
 } // namespace OHOS

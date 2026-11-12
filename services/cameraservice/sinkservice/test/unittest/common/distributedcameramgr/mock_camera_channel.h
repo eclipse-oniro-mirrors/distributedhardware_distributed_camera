@@ -59,8 +59,15 @@ public:
         return DCAMERA_OK;
     }
 
+    int32_t sendDataCount = 0;
+    std::string lastSentData;
+
     int32_t SendData(std::shared_ptr<DataBuffer>& buffer)
     {
+        sendDataCount++;
+        if (buffer != nullptr && buffer->Data() != nullptr && buffer->Size() > 0) {
+            lastSentData.assign(reinterpret_cast<const char *>(buffer->Data()), buffer->Size());
+        }
         if (g_channelStr == "test005") {
             return DCAMERA_BAD_VALUE;
         }
