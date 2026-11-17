@@ -404,10 +404,12 @@ int32_t DCameraSinkController::CloseChannelInner(const std::string &srcDevId)
                 GetAnonyString(dhId_).c_str(), ret);
         }
 
-        ret = output_->CloseChannel();
-        if (ret != DCAMERA_OK) {
-            DHLOGE("DCameraSinkController CloseChannel failed, dhId: %{public}s, ret: %{public}d",
-                GetAnonyString(dhId_).c_str(), ret);
+        if (output_ != nullptr) {
+            ret = output_->CloseChannel();
+            if (ret != DCAMERA_OK) {
+                DHLOGE("DCameraSinkController CloseChannel failed, dhId: %{public}s, ret: %{public}d",
+                    GetAnonyString(dhId_).c_str(), ret);
+            }
         }
     }
     sessionState_ = DCAMERA_CHANNEL_STATE_DISCONNECTED;
