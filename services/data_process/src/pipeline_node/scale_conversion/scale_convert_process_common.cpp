@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 Huawei Device Co., Ltd.
+ * Copyright (c) 2022-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -298,9 +298,13 @@ int32_t ScaleConvertProcess::ScaleConvert(ImageUnitInfo& srcImgInfo, ImageUnitIn
             return DCAMERA_BAD_VALUE;
     }
 
-    sws_scale(swsContext_, static_cast<const uint8_t * const *>(srcData_), srcLineSize_, 0, srcImgInfo.height,
-        dstData_, dstLineSize_);
-    int32_t ret = memcpy_s(dstImgInfo.imgData->Data(), dstImgInfo.imgSize, dstData_[0], dstBuffSize_);
+    int32_t ret = sws_scale(swsContext_, static_cast<const uint8_t * const *>(srcData_), srcLineSize_, 0,
+        srcImgInfo.height, dstData_, dstLineSize_);
+    if (ret < 0) {
+        DHLOGE("ScaleConvertProcess::ScaleConvert sws_scale failed, ret = %{public}d", ret);
+        return DCAMERA_MEMORY_OPT_ERROR;
+    }
+    ret = memcpy_s(dstImgInfo.imgData->Data(), dstImgInfo.imgSize, dstData_[0], dstBuffSize_);
     if (ret != EOK) {
         DHLOGE("ScaleConvertProcess::ScaleConvert copy dst image info failed, ret = %{public}d", ret);
         return DCAMERA_MEMORY_OPT_ERROR;

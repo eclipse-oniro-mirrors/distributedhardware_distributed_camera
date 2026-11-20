@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025 Huawei Device Co., Ltd.
+ * Copyright (c) 2021-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -52,7 +52,10 @@ void DCameraPhotoSurfaceListener::OnBufferAvailable()
     do {
         char *address = static_cast<char *>(buffer->GetVirAddr());
         int32_t size = -1;
-        buffer->GetExtraData()->ExtraGet("dataSize", size);
+        auto extraData = buffer->GetExtraData();
+        if (extraData != nullptr) {
+            extraData->ExtraGet("dataSize", size);
+        }
         if (size <= 0) {
             size = static_cast<int32_t>(buffer->GetSize());
         }

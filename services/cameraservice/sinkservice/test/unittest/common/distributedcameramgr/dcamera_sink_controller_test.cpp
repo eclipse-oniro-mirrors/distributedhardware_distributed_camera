@@ -1963,5 +1963,23 @@ HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_on_session_disc
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     SUCCEED();
 }
+
+/**
+ * @tc.name: dcamera_sink_controller_test_close_channel_output_null_001
+ * @tc.desc: Verify CloseChannelInner does not crash and resets state when output_ is nullptr.
+ * @tc.type: FUNC
+ * @tc.require: DTS
+ */
+HWTEST_F(DCameraSinkControllerTest, dcamera_sink_controller_test_close_channel_output_null_001, TestSize.Level1)
+{
+    g_sinkConnect = false;
+    controller_->output_ = nullptr;
+    controller_->sessionState_ = DCAMERA_CHANNEL_STATE_CONNECTED;
+    controller_->isPageStatus_.store(true);
+
+    int32_t ret = controller_->CloseChannel();
+
+    EXPECT_EQ(DCAMERA_OK, ret);
+}
 } // namespace DistributedHardware
 } // namespace OHOS
